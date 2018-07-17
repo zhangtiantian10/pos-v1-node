@@ -1,7 +1,6 @@
 const printInventory = require('../main/main');
 
 describe('pos', function () {
-    var allItems;
     var inputs;
 
     beforeEach(function () {
