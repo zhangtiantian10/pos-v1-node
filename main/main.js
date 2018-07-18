@@ -1,15 +1,112 @@
-module.exports = function printInventory(inputs) {
+const database = require('./datbase');
 
-    console.log('***<没钱赚商店>购物清单***\n' +
-        '名称：雪碧，数量：5瓶，单价：3.00(元)，小计：12.00(元)\n' +
-        '名称：荔枝，数量：2斤，单价：15.00(元)，小计：30.00(元)\n' +
-        '名称：方便面，数量：3袋，单价：4.50(元)，小计：9.00(元)\n' +
-        '----------------------\n' +
-        '挥泪赠送商品：\n' +
-        '名称：雪碧，数量：1瓶\n' +
-        '名称：方便面，数量：1袋\n' +
-        '----------------------\n' +
-        '总计：51.00(元)\n' +
-        '节省：7.50(元)\n' +
-        '**********************');
+module.exports = function printInventory(inputs) {
+    let items = formatInputs(inputs);
+    items = formatItems(items);
+
+    items = countItemsSubtotal(items);
+
+    items = markPromotionItem(items);
+
+    items = countSavedMoney(items);
+
+    const total = getTotal(items);
+    const saved = getSaved(items);
+
+    const printText = getPrintTest(items, total, saved);
+    console.log(printText);
 };
+
+const formatInputs = (inputs) => {
+    const results = [];
+    inputs.forEach(input => {
+        const array = input.split('-');
+        let count = 1;
+        const barcode = array[0];
+        if (array.length > 1) {
+            count = array[1];
+        }
+
+        const item = results.find(result => result.barcode === barcode);
+
+        if (item) {
+            item.count += count;
+        } else {
+            results.push({barcode, count});
+        }
+    })
+
+    return results;
+}
+
+const formatItems = (items) => {
+    const allItems = database.loadAllItems();
+    return items.map(item => {
+        const findItem = allItems.find(a => a.barcode === item.barcode);
+        if (findItem) {
+            return Object.assign({}, findItem, {count: item.count});
+        }
+
+        return item;
+    })
+}
+
+const markPromotionItem = (items) => {
+    const promotions = database.loadPromotions()
+    const promotionBarcodes = promotions[0].barcodes
+    return items.map(item => {
+        let isPromotion = 0;
+        if (promotionBarcodes.includes(item.barcode)) {
+            isPromotion = 1;
+        }
+
+        return Object.assign({}, item, {isPromotion});
+    })
+}
+
+const countItemsSubtotal = (items) => {
+    return items.map(item => Object.assign({}, item, {subtotal: item.price * item.count}));
+}
+
+const countSavedMoney = (items) => {
+    return items.map(item => {
+        const {price, isPromotion} = item;
+        let count = 0;
+        if (isPromotion === 1) {
+            count = Math.floor(item.count / 3);
+        }
+
+        return Object.assign({}, item, {saved: price * count});
+    })
+}
+
+const getTotal = (items) => {
+    return items.reduce((p, n) => p + n.subtotal, 0);
+}
+
+const getSaved = (items) => {
+    return items.reduce((p, n) => p + n.saved, 0);
+}
+
+const getPrintTest = (items, total, saved) => {
+    let result = '***<没钱赚商店>购物清单***\n';
+    result += `${getAllItemsString(items)}
+----------------------
+挥泪赠送商品：
+${getPromotionItems(items)}
+----------------------
+总计：${(total - saved).toFixed(2)}(元)
+节省：${saved.toFixed(2)}(元)
+**********************`;
+    return result;
+}
+
+const getAllItemsString = (items) => {
+    return items.map(item => `名称：${item.name}，数量：${item.count + item.unit}，单价：${item.price.toFixed(2)}(元)，小计：${(item.subtotal - item.saved).toFixed(2)}(元)`).join('\n');
+}
+
+const getPromotionItems = (items) => {
+    return items.filter(item => item.isPromotion).map(item => {
+        return `名称：${item.name}，数量：${Math.floor(item.count / 3) + item.unit}`
+    }).join('\n');
+}
